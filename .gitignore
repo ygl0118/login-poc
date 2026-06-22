@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.pytest_cache/
+test-results/
+playwright-report/
+trace.zip
+*.png
+
+# 已登入態/cookies 匯出檔，內含個人 cookies，嚴禁進版控
+auth_state.json
+auth_state*.json

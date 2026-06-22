@@ -1,0 +1,85 @@
+name: login-tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # ── 確定性 mock：CI 的主要把關（穩定、可重現）──
+  mock-tests:
+    name: mock 測試（前段登入行為 + 條件4 + 條件5）
+    runs-on: ubuntu-latest
+    env:
+      # 帳密來自 GitHub Repository variables（Settings → Secrets and variables →
+      # Actions → Variables），不寫死於程式碼、也不出現在 commit。
+      LOGIN_USERNAME: ${{ vars.LOGIN_USERNAME }}
+      LOGIN_PASSWORD: ${{ vars.LOGIN_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+
+      # 預設只跑 mock（pytest.ini 以 -m "not live" 排除真實站）：
+      #   前段登入行為 + 登入後行為（成功=條件5 / 失敗=條件4），並產生證據截圖。
+      - name: Run mock test suite
+        run: python -m pytest
+
+      - name: Upload test evidence & artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mock-test-results
+          path: |
+            test-results/
+            **/*.png
+          if-no-files-found: ignore
+
+  # ── 真實站 live：只驗證可達範圍（前段登入行為 條件1/2/3 + 反向），
+  #    不依賴破解 GeeTest，故可上 CI。但因對外連線正式站（Cloudflare / 地區限制可能
+  #    對 datacenter IP 有不同行為），設為非阻斷（continue-on-error），僅作資訊性訊號。
+  live-tests:
+    name: 真實站 live（前段登入行為 條件1/2/3 + 反向，非阻斷）
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      LOGIN_USERNAME: ${{ vars.LOGIN_USERNAME }}
+      LOGIN_PASSWORD: ${{ vars.LOGIN_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Run live test suite (swag.live)
+        run: python -m pytest tests/test_login.py -m live
+
+      - name: Upload live artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-test-results
+          path: |
+            test-results/
+            **/*.png
+          if-no-files-found: ignore
